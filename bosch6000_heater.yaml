@@ -1,0 +1,87 @@
+esphome:
+  name: bosch6000_heater
+  platform: ESP8266
+  board: d1_mini
+  includes:
+    - OpenTherm.h
+    - OpenTherm.cpp
+    - bocsh6000.h
+  esp8266_restore_from_flash: true
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: true
+
+dallas:
+  - pin: GPIO14
+
+logger:
+
+api:
+
+ota:
+
+switch:
+
+binary_sensor:
+
+text_sensor:
+  - platform: template
+    name: "Boiler uptime"
+    lambda: |-
+        uint32_t dur = id(uptime_s).state;
+        int dys = 0;
+        int hrs = 0;
+        int mnts = 0;
+        if (dur > 86399) {
+          dys = trunc(dur / 86400);
+          dur = dur - (dys * 86400);
+        }
+        if (dur > 3599) {
+          hrs = trunc(dur / 3600);
+          dur = dur - (hrs * 3600);
+        }
+        if (dur > 59) {
+          mnts = trunc(dur / 60);
+          dur = dur - (mnts * 60);
+        }
+        char buffer[17];
+        sprintf(buffer, "%ud %02uh %02um %02us", dys, hrs, mnts, dur);
+        return {buffer};
+    icon: mdi:clock
+    update_interval: 30s
+
+sensor:
+  - platform: homeassistant
+    id: mitemp_bt_temperature
+    entity_id: sensor.mitemp_bt_temperature
+  - platform: dallas
+    address: 0x703C01F095AC1E28
+    name: "Warm floor temperature"
+  - platform: uptime
+    id: uptime_s
+    update_interval: 30s
+
+climate:
+- platform: custom
+  lambda: |-
+    auto boiler = new Boiler();
+    App.register_component(boiler);
+    
+    boiler->house_temp = id(mitemp_bt_temperature);
+    
+    App.register_sensor(boiler->boiler_water_temp);
+    App.register_sensor(boiler->dhw_temperature);
+    App.register_sensor(boiler->dhw_flow_rate);
+    App.register_sensor(boiler->rel_mod_level);
+    App.register_binary_sensor(boiler->flame);
+    App.register_binary_sensor(boiler->connection);
+    App.register_text_sensor(boiler->fault);
+    App.register_text_sensor(boiler->heat_interval);
+    App.register_switch(boiler->hot_water);
+    
+    App.register_climate(boiler);
+    return {boiler};
+  climates:
+    - name: "Boiler"
