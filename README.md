@@ -1,6 +1,6 @@
 <img src="https://user-images.githubusercontent.com/29150943/135769411-5f3ec076-1856-414a-bb72-7c28f793265d.jpg" height="300">
 
-Так выглядит мой термостат в Home Assistant <b><a href="https://user-images.githubusercontent.com/29150943/135770499-696640e5-6881-4ac7-9aa3-831cae0480f9.gif" target="_blank">135770499-696640e5-6881-4ac7-9aa3-831cae0480f9.gif</a></b>
+Так выглядит мой термостат в Home Assistant <b><a href="https://user-images.githubusercontent.com/29150943/135770499-696640e5-6881-4ac7-9aa3-831cae0480f9.gif" target="blank">135770499-696640e5-6881-4ac7-9aa3-831cae0480f9.gif</a></b>
 
 Этот термостат имеет режимы работы и интервал простоя между нагревами. Так котел не тактует и не работает на износ, а теплый пол\радиаторы успевают отдать тепло. Такое поведение подсмотрено у оригинального термостата Bosch CR10(стоял у меня до этого, хотя в его основе похоже обычный pid). Проект еще находится в разработке, не все режимы работают.
 
@@ -11,6 +11,10 @@ sensor:
   - platform: homeassistant
     id: mitemp_bt_temperature
     entity_id: sensor.mitemp_bt_temperature
+```
+
+```
+boiler->house_temp = id(mitemp_bt_temperature);
 ```
 
 Для того чтобы можно было выбирать несколько режимов работы, а также настройки ручного режима в HA в `configuration.yaml`:
