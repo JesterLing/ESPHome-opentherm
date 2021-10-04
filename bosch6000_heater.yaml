@@ -54,7 +54,7 @@ text_sensor:
 
 sensor:
   - platform: homeassistant
-    id: mitemp_bt_temperature
+    id: house_temp_sensor
     entity_id: sensor.mitemp_bt_temperature
   - platform: dallas
     address: 0x703C01F095AC1E28
@@ -69,7 +69,7 @@ climate:
     auto boiler = new Boiler();
     App.register_component(boiler);
     
-    boiler->house_temp = id(mitemp_bt_temperature);
+    boiler->house_temp = id(house_temp_sensor);
     
     App.register_sensor(boiler->boiler_water_temp);
     App.register_sensor(boiler->dhw_temperature);
