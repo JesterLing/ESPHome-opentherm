@@ -1,5 +1,5 @@
 <p align="center"><img src="https://user-images.githubusercontent.com/29150943/135769411-5f3ec076-1856-414a-bb72-7c28f793265d.jpg" height="300"></p>
-<p>Этот термостат имеет на выбор 3 алгоритма работы: авто, pid, ручной. Пид или температурные кривые пока не реализован т.к сам не знаю как к нему подступится. Кто хочет заняться полезные ссылки <a href="https://wdn.su/blog/1154" target="_blank">1</a>, <a href="https://esphome.io/components/climate/pid.html" target="_blank">2</a>.</p>
+<p>Этот термостат имеет на выбор 3 алгоритма работы: авто, pid, ручной. Пид или температурные кривые пока не реализован т.к сам не знаю как к нему подступится. Кто хочет заняться полезные ссылки <a href="https://wdn.su/blog/1154">1</a>, <a href="https://esphome.io/components/climate/pid.html">2</a>, <a href="http://arduino.ru/forum/programmirovanie/termostat-opentherm-na-esp8266">3</a>.</p>
 <p>Реализован интервал простоя между нагревами. Так котел не тактует и не работает на износ, а теплый пол/радиаторы успевают отдать тепло. Такое поведение подсмотрено у оригинального термостата Bosch CR10 который стоял у меня до этого.</p>
 <p align="center">Так выглядит мой термостат в Home Assistant</p>
 <p align="center"><img src="https://user-images.githubusercontent.com/29150943/135770499-696640e5-6881-4ac7-9aa3-831cae0480f9.gif" height="700"></p>
