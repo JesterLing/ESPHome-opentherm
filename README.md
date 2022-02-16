@@ -1,16 +1,37 @@
-<img src="https://user-images.githubusercontent.com/29150943/135769411-5f3ec076-1856-414a-bb72-7c28f793265d.jpg" height="300">
+<p align="center"><img src="https://user-images.githubusercontent.com/29150943/135769411-5f3ec076-1856-414a-bb72-7c28f793265d.jpg" height="300"></p>
+<p>Этот термостат имеет на выбор 3 алгоритма работы: авто, pid, ручной. Пид или температурные кривые пока не реализован т.к сам не знаю как к нему подступится. Кто хочет заняться полезные ссылки <a href="https://wdn.su/blog/1154" target="_blank">1</a>, <a href="https://esphome.io/components/climate/pid.html" target="_blank">2</a>.
+Реализован интервал простоя между нагревами. Так котел не тактует и не работает на износ, а теплый пол/радиаторы успевают отдать тепло. Такое поведение подсмотрено у оригинального термостата Bosch CR10 который стоял у меня до этого.</p>
+<p align="center">Так выглядит мой термостат в Home Assistant</p>
+<p align="center"><img src="https://user-images.githubusercontent.com/29150943/135770499-696640e5-6881-4ac7-9aa3-831cae0480f9.gif" height="700"></p>
 
-Так выглядит мой термостат в Home Assistant <b><a href="https://user-images.githubusercontent.com/29150943/135770499-696640e5-6881-4ac7-9aa3-831cae0480f9.gif" target="blank">135770499-696640e5-6881-4ac7-9aa3-831cae0480f9.gif</a></b>
+<h2>Что нужно</h2>
 
-Этот термостат имеет выбор режима(алгоритма) работы и интервал простоя между нагревами. Так котел не тактует и не работает на износ, а теплый пол\радиаторы успевают отдать тепло. Такое поведение подсмотрено у оригинального термостата Bosch CR10 который стоял у меня до этого. Проект еще находится в разработке, не все режимы работают.
+* OpenTherm Adapter + Shield (купить можно здесь http://ihormelnyk.com/shop)
+* Wemos D1 Mini
+* Провод двужильный
+* Корпус (опционально)
 
-В файле `bosch6000_heater.yaml` необходимо задать свой wi-fi и сенсор из HA который будет отдавать на ESP фактическую температуру помещения:
+<h2>Настройка</h2>
+
+Перед прошивкой в ESPHome в файле `heater.yaml` необходимо задать свой Wi-Fi и сенсор из HA который будет отдавать фактическую температуру помещения:
 
 ```
 sensor:
   - platform: homeassistant
     id: house_temp_sensor
     entity_id: sensor.mitemp_bt_temperature
+```
+
+Если у вас нет датчика температуры или он не выведен на пол необходимо отредактировать:
+
+```
+- platform: dallas
+  address: 0x703C01F095AC1E28     #https://esphome.io/components/sensor/dallas.html
+  name: "Warm floor temperature"
+  filters:
+  - sliding_window_moving_average:
+      window_size: 2
+      send_every: 2
 ```
 
 Для того чтобы можно было выбирать несколько режимов работы, а также настройки ручного режима в HA в `configuration.yaml`:
@@ -45,7 +66,7 @@ input_select:
     initial: Автоматический
     icon: mdi:home-thermometer
 ```
-При изменении параметров что выше, дергаем службу которая передаст новые настройки на ESP `automations.yaml`:
+Создаем автоматизацию что при изменении параметров что выше, дергаем службу которая передаст новые настройки на ESP `automations.yaml`:
 ```
 - id: heater_settings_change
   alias: Изменены настройки котла
@@ -57,7 +78,7 @@ input_select:
     - platform: state
       entity_id: input_number.heater_interval
   action:
-    - service: esphome.bosch6000_heater_boiler_change_mode
+    - service: esphome.beater_boiler_change_mode
       data:
         method: >
           {% if states('sensor.boiler_status') == 'Автоматический' %}
@@ -102,8 +123,3 @@ input_select:
           Котел выдал ошибку! {{ states('sensor.boiler_status') }}
         {% endif %}
 ```
-
-<ul>
-  <li>Source OpenThem Library https://github.com/ihormelnyk/opentherm_library</li>
-  <li>OpenThem Shield http://ihormelnyk.com/shop</li>
-</ul>
