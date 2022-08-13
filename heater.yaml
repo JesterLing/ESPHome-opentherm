@@ -1,91 +1,132 @@
 esphome:
-  name: heater
-  platform: ESP8266
-  board: d1_mini
+  name: "heater"
+  comment: "Управление отоплением Bosch 6000 на основе OpenTherm"
   includes:
-    - OpenTherm.h
-    - OpenTherm.cpp
-    - bocsh6000.h
-  esp8266_restore_from_flash: true
+    - opentherm-src/
+    
+esp8266:
+  board: d1_mini
+  restore_from_flash: true
 
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   fast_connect: true
 
-dallas:
-  - pin: GPIO14
-
 logger:
+  level: WARN # if all is well, you can replace it with WARN
 
 api:
-
 ota:
 
-switch:
+dallas:           # built-in temperature sensor on Ihor Melnyk`s OpenThem Shield
+  - pin: GPIO14   # i put it on the warm floor
 
 binary_sensor:
-
+number:
+select:
 text_sensor:
+
+switch:
   - platform: template
-    name: "Boiler uptime"
-    lambda: |-
-        uint32_t dur = id(uptime_s).state;
-        int dys = 0;
-        int hrs = 0;
-        int mnts = 0;
-        if (dur > 86399) {
-          dys = trunc(dur / 86400);
-          dur = dur - (dys * 86400);
-        }
-        if (dur > 3599) {
-          hrs = trunc(dur / 3600);
-          dur = dur - (hrs * 3600);
-        }
-        if (dur > 59) {
-          mnts = trunc(dur / 60);
-          dur = dur - (mnts * 60);
-        }
-        char buffer[17];
-        sprintf(buffer, "%ud %02uh %02um %02us", dys, hrs, mnts, dur);
-        return {buffer};
-    icon: mdi:clock
-    update_interval: 30s
+    name: "PID Climate Autotune"
+    turn_on_action:
+      - climate.pid.autotune:
+          id: pid_climate
+          negative_output: 0%
+    entity_category: diagnostic
 
 sensor:
   - platform: homeassistant
     id: house_temp_sensor
-    entity_id: sensor.mitemp_bt_temperature
-  - platform: dallas
+    entity_id: sensor.mj_ht_v1_temperature    # your temperature sensor from HA
+  - platform: pid
+    name: "PID Climate Result"
+    entity_category: diagnostic
+    type: RESULT    
+  - platform: pid
+    name: "PID Climate HEAT"
+    type: HEAT
+    entity_category: diagnostic
+  - platform: pid
+    name: "PID Climate ERROR"
+    type: ERROR  
+    entity_category: diagnostic
+  - platform: dallas                # https://esphome.io/components/sensor/dallas.html
     address: 0x703C01F095AC1E28
     name: "Warm floor temperature"
     filters:
     - sliding_window_moving_average:
         window_size: 2
         send_every: 2
-  - platform: uptime
-    id: uptime_s
-    update_interval: 30s
 
 climate:
+- platform: pid       # https://esphome.io/components/climate/pid.html
+  id: pid_climate
+  sensor: house_temp_sensor
+  default_target_temperature: 10°C
+  heat_output: pid_output
+  control_parameters: # enter your values here
+    kp: 0.38197
+    ki: 0.01012
+    kd: 3.60387
 - platform: custom
   lambda: |-
-    auto boiler = new Boiler();
-    App.register_component(boiler);
+    auto ot = new esphome::opentherm::OpenThermGWClimate(4, 5); // set up your pins
+    App.register_component(ot);
+    App.register_number(ot->interval_number);
+    App.register_number(ot->ch_temp_number);
+    App.register_select(ot->mode_select);
+    App.register_binary_sensor(ot->flame_on);
+    App.register_switch(ot->hot_water);
+    ot->house_temp = id(house_temp_sensor);
+    ot->pid_calc = id(pid_climate);
+
+    // if you do not need any of the sensors below, comment out two lines
     
-    boiler->house_temp = id(house_temp_sensor);
+    ot->boiler_water_temp = new Sensor();
+    App.register_sensor(ot->boiler_water_temp);
     
-    App.register_sensor(boiler->boiler_water_temp);
-    App.register_sensor(boiler->dhw_temperature);
-    App.register_sensor(boiler->dhw_flow_rate);
-    App.register_sensor(boiler->rel_mod_level);
-    App.register_binary_sensor(boiler->flame);
-    App.register_binary_sensor(boiler->connection);
-    App.register_text_sensor(boiler->fault);
-    App.register_text_sensor(boiler->heat_interval);
-    App.register_switch(boiler->hot_water);
+    ot->connection = new BinarySensor();
+    App.register_binary_sensor(ot->connection);
     
-    App.register_climate(boiler);
-    return {boiler};
+    ot->fault = new TextSensor();
+    App.register_text_sensor(ot->fault);
+    
+    ot->heat_interval = new TextSensor();
+    App.register_text_sensor(ot->heat_interval);
+    
+    ot->dhw_flow_rate = new Sensor();
+    App.register_sensor(ot->dhw_flow_rate);
+    
+    ot->dhw_temperature = new Sensor();
+    App.register_sensor(ot->dhw_temperature);
+    
+    ot->relative_modulation_level = new Sensor();
+    App.register_sensor(ot->relative_modulation_level);
+    
+    //  ot->ch_water_pressure = new Sensor();
+    //  App.register_sensor(ot->ch_water_pressure);
+    
+    //  ot->outside_air_temperature = new Sensor();
+    //  App.register_sensor(ot->outside_air_temperature);
+    
+    //  ot->return_water_temperature = new Sensor();
+    //  App.register_sensor(ot->return_water_temperature);
+    
+    App.register_climate(ot);
+    return {ot};
   climates:
-    - name: "Boiler"
+    - name: "Heater"
+      id: ot
+output:
+  - platform: custom
+    type: float
+    lambda: |-
+      esphome::opentherm::OpenThermGWClimate *ot2 = (esphome::opentherm::OpenThermGWClimate*) ot;
+      auto pid_output = new esphome::opentherm::OpenThermGWOutput();
+      ot2->pid_output = pid_output;
+      App.register_component(pid_output);
+      return {pid_output};
+    outputs:
+      id: pid_output

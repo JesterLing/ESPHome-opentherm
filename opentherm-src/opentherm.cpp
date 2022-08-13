@@ -3,7 +3,7 @@ OpenTherm.cpp - OpenTherm Communication Library For Arduino, ESP8266
 Copyright 2018, Ihor Melnyk
 */
 
-#include "OpenTherm.h"
+#include "opentherm.h"
 
 OpenTherm::OpenTherm(int inPin, int outPin, bool isSlave):
 	status(OpenThermStatus::NOT_INITIALIZED),
@@ -180,7 +180,7 @@ void OpenTherm::process()
 
 	if (st == OpenThermStatus::READY) return;
 	unsigned long newTs = micros();
-	if (st != OpenThermStatus::NOT_INITIALIZED && (newTs - ts) > 1000000) {
+	if (st != OpenThermStatus::NOT_INITIALIZED && st != OpenThermStatus::DELAY && (newTs - ts) > 1000000) {
 		status = OpenThermStatus::READY;
 		responseStatus = OpenThermResponseStatus::TIMEOUT;
 		if (processResponseCallback != NULL) {
