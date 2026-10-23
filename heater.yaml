@@ -1,8 +1,11 @@
 esphome:
   name: "heater"
   comment: "Управление отоплением Bosch 6000 на основе OpenTherm"
-  includes:
-    - opentherm-src/
+
+external_components:
+  - source:
+      type: local
+      path: components
 
 esp8266:
   board: d1_mini
@@ -23,9 +26,28 @@ logger:
 api:
 
 ota:
+  - platform: esphome
 
-dallas: # built-in temperature sensor on Ihor Melnyk`s OpenThem Shield
-  - pin: GPIO14 # i put it on the warm floor
+one_wire: # built-in temperature sensor on Ihor Melnyk`s OpenThem Shield
+  - platform: gpio
+    pin: GPIO14 # i put it on the warm floor
+
+opentherm:
+  in_pin: 4 # set up your pins
+  out_pin: 5
+  # CH is requested only when the setpoint is above 0, the setpoint is driven by the boiler climate
+  ch_enable: true
+  # DHW is controlled by the "Boiler hot water" switch
+  dhw_enable: true
+  controller_product_type: 1 # MasterVersion 0x013F, as the original thermostat did
+  controller_product_version: 63
+  controller_id: 1 # replaced below by the boiler member ID
+  before_send:
+    then:
+      - lambda: |-
+          // MConfigMMemberIDcode: answer the boiler with its own member ID (read from SConfigSMemberIDcode before)
+          if (x.id == 2 && !std::isnan(id(boiler_member_id).state))
+            x.valueLB = (uint8_t) id(boiler_member_id).state;
 
 select:
   - platform: template
@@ -61,13 +83,21 @@ number:
     step: 1
     id: ch_temp_number
 
+  - platform: opentherm
+    t_set:
+      id: ch_setpoint
+      name: "Boiler CH setpoint"
+      internal: true # written by the boiler climate
+      min_value: 0
+      max_value: 85
+      initial_value: 0 # on boot, so that the boiler does not heat before the thermostat state is restored
+
 switch:
-  - platform: template
-    name: "Boiler hot water"
-    icon: mdi:coolant-temperature
-    optimistic: true
-    restore_state: true
-    id: hot_water
+  - platform: opentherm
+    dhw_enable:
+      name: "Boiler hot water"
+      icon: mdi:coolant-temperature
+      restore_mode: RESTORE_DEFAULT_OFF
 
   - platform: restart
     name: "Boiler Restart"
@@ -98,7 +128,7 @@ sensor:
     type: ERROR
     entity_category: diagnostic
 
-  - platform: dallas # https://esphome.io/components/sensor/dallas.html
+  - platform: dallas_temp # https://esphome.io/components/sensor/dallas_temp.html
     address: 0x703C01F095AC1E28
     name: "Warm floor temperature"
     filters:
@@ -106,77 +136,125 @@ sensor:
           window_size: 3
           send_every: 3
 
-  - platform: custom
-    lambda: |-
-      esphome::opentherm::OpenThermGWClimate *otComponent = (esphome::opentherm::OpenThermGWClimate*) id(ot);
-
-      otComponent->boiler_water_temp = new Sensor();
-      otComponent->dhw_temperature = new Sensor();
-      otComponent->relative_modulation_level = new Sensor();
-      otComponent->dhw_flow_rate = new Sensor();
-      //  otComponent->ch_water_pressure = new Sensor();
-      //  otComponent->outside_air_temperature = new Sensor();
-      //  otComponent->return_water_temperature = new Sensor();
-
-      return { 
-        otComponent->boiler_water_temp,
-        otComponent->dhw_temperature,
-        otComponent->relative_modulation_level,
-        otComponent->dhw_flow_rate
-      };
-    sensors:
-      - name: "Boiler CH Temp"
-        unit_of_measurement: "°C"
-        accuracy_decimals: 1
-        filters:
-          - delta: 0.5
-      - name: "Boiler DHW Temp"
-        unit_of_measurement: "°C"
-        accuracy_decimals: 1
-        filters:
-          - delta: 0.5
-      - name: "Boiler Rel Mod Level"
-        unit_of_measurement: "%"
-        icon: mdi:percent
-        accuracy_decimals: 1
-      - name: "Boiler Water Flow Rate"
-        unit_of_measurement: "л/мин"
-        icon: mdi:approximately-equal
-        accuracy_decimals: 1
+  - platform: opentherm
+    t_boiler:
+      id: boiler_ch_temp
+      name: "Boiler CH Temp"
+      unit_of_measurement: "°C"
+      accuracy_decimals: 1
+      filters:
+        - delta: 0.5
+    t_dhw:
+      name: "Boiler DHW Temp"
+      unit_of_measurement: "°C"
+      accuracy_decimals: 1
+      filters:
+        - delta: 0.5
+    rel_mod_level:
+      name: "Boiler Rel Mod Level"
+      unit_of_measurement: "%"
+      icon: mdi:percent
+      accuracy_decimals: 1
+    dhw_flow_rate:
+      name: "Boiler Water Flow Rate"
+      unit_of_measurement: "л/мин"
+      icon: mdi:approximately-equal
+      accuracy_decimals: 1
+    # ch_pressure:
+    #   name: "Boiler CH Pressure"
+    # t_outside:
+    #   name: "Boiler Outside Temp"
+    # t_ret:
+    #   name: "Boiler Return Temp"
+    oem_fault_code:
+      id: boiler_oem_fault_code
+      internal: true
+    # read once at startup, the values are only logged as before
+    device_id:
+      id: boiler_member_id
+      internal: true
+    device_type:
+      id: boiler_device_type
+      internal: true
+    device_version:
+      id: boiler_device_version
+      internal: true
 
 binary_sensor:
-  - platform: custom
-    lambda: |-
-      esphome::opentherm::OpenThermGWClimate *otComponent = (esphome::opentherm::OpenThermGWClimate*) id(ot);
-      otComponent->flame_on = new BinarySensor();
-      otComponent->connection = new BinarySensor();
-      return {
-        otComponent->flame_on,
-        otComponent->connection
-      };
-    binary_sensors:
-      - name: "Boiler flame"
-        icon: mdi:fire
-      - name: "Boiler OT connection"
-        device_class: connectivity
-        entity_category: diagnostic
+  - platform: opentherm
+    flame_on:
+      id: boiler_flame
+      name: "Boiler flame"
+      icon: mdi:fire
+    ch_active:
+      id: boiler_ch_active
+      internal: true
+    fault_indication:
+      id: boiler_fault
+      internal: true
+    diagnostic_indication:
+      id: boiler_diagnostic
+      internal: true
+    service_request:
+      id: boiler_service_request
+      internal: true
+    low_water_pressure:
+      id: boiler_low_water_pressure
+      internal: true
+    flame_fault:
+      id: boiler_flame_fault
+      internal: true
+    air_pressure_fault:
+      id: boiler_air_pressure_fault
+      internal: true
+    water_over_temp:
+      id: boiler_water_over_temp
+      internal: true
+    # read once at startup, the values are only logged as before
+    dhw_present:
+      id: boiler_dhw_present
+      internal: true
+    control_type_on_off:
+      id: boiler_control_type_on_off
+      internal: true
+    cooling_supported:
+      id: boiler_cooling_supported
+      internal: true
+    dhw_storage_tank:
+      id: boiler_dhw_storage_tank
+      internal: true
+    controller_pump_control_allowed:
+      id: boiler_pump_control_allowed
+      internal: true
+    ch2_present:
+      id: boiler_ch2_present
+      internal: true
 
 text_sensor:
-  - platform: custom
+  - platform: template
+    name: "Boiler Status"
+    icon: mdi:sync
+    entity_category: diagnostic
+    update_interval: 5s
     lambda: |-
-      esphome::opentherm::OpenThermGWClimate *otComponent = (esphome::opentherm::OpenThermGWClimate*) id(ot);
-      otComponent->fault = new TextSensor();
-      otComponent->heat_interval = new TextSensor();
-      return {
-        otComponent->fault,
-        otComponent->heat_interval,
-      };
-    text_sensors:
-      - name: "Boiler Status"
-        icon: mdi:sync
-        entity_category: diagnostic
-      - name: "Boiler Heat Interval"
-        icon: mdi:camera-timer
+      if (id(boiler_diagnostic).state)
+        return {"Режим диагностики"};
+      if (!id(boiler_fault).state)
+        return {"OK"};
+      std::string text = "Ошибка E";
+      if (!std::isnan(id(boiler_oem_fault_code).state))
+        text += to_string((int) id(boiler_oem_fault_code).state);
+      if (id(boiler_service_request).state)
+        text += " Требуется сервис";
+      if (id(boiler_low_water_pressure).state)
+        text += " Низкое давление воды";
+      if (id(boiler_flame_fault).state)
+        text += " Ошибка по газу/огню";
+      if (id(boiler_air_pressure_fault).state)
+        text += " Ошибка по тяге воздуха";
+      if (id(boiler_water_over_temp).state)
+        text += " Перегрев теплоносителя";
+      return {text};
 
 climate:
   - platform: pid
@@ -188,31 +266,21 @@ climate:
       kp: 0.38197
       ki: 0.01012
       kd: 3.60387
-  - platform: custom
-    lambda: |-
-      auto ot = new esphome::opentherm::OpenThermGWClimate(4, 5); // set up your pins
 
-      ot->hot_water = id(hot_water);
-      ot->house_temp = id(house_temp_sensor);
-      ot->mode_select = id(mode_select);
-      ot->interval_number = id(interval_number);
-      ot->ch_temp_number = id(ch_temp_number);
-      ot->pid_calc = id(pid_climate);
-
-      App.register_component(ot);
-      return {ot};
-    climates:
-      - name: "boiler"
-        id: ot
-
-output:
-  - platform: custom
-    type: float
-    lambda: |-
-      esphome::opentherm::OpenThermGWClimate *otComponent = (esphome::opentherm::OpenThermGWClimate*) id(ot);
-      auto pid_output = new esphome::opentherm::OpenThermGWOutput();
-      otComponent->pid_output = pid_output;
-      App.register_component(pid_output);
-      return {pid_output};
-    outputs:
+  - platform: boiler_climate
+    id: ot
+    name: "boiler"
+    house_temp: house_temp_sensor
+    pid_climate: pid_climate
+    pid_output:
       id: pid_output
+    mode_select: mode_select
+    interval_number: interval_number
+    ch_temp_number: ch_temp_number
+    ch_setpoint: ch_setpoint
+    boiler_temp: boiler_ch_temp
+    flame_on: boiler_flame
+    ch_active: boiler_ch_active
+    heat_interval:
+      name: "Boiler Heat Interval"
+      icon: mdi:camera-timer
