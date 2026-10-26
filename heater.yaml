@@ -69,6 +69,7 @@ number:
     min_value: 0
     max_value: 60
     initial_value: 10
+    restore_value: true
     step: 1
     id: interval_number
 
@@ -80,6 +81,7 @@ number:
     min_value: 40
     max_value: 85
     initial_value: 40
+    restore_value: true
     step: 1
     id: ch_temp_number
 
